@@ -64,6 +64,11 @@ set(SOURCES
     src/cluster/nav_core.cpp
     src/cluster/hud_terminal.cpp
     src/cluster/hud6wa_display.cpp
+    src/cluster/hud6wb_display.cpp
+    src/cluster/hud6wb_codec.cpp
+    src/cluster/hud6wb_kit.cpp
+    src/cluster/grafite_oro/artwork6wb.cpp
+    src/cluster/grafite_oro/hudterminal_palette.cpp
     src/cluster/ric_media.cpp
     src/gesture_sniff.cpp
     src/audio/speex.c
@@ -92,4 +97,5 @@ target_link_libraries(nbt-aad PRIVATE
     ssl
     crypto
     screen
+    m
 )

@@ -53,10 +53,11 @@ const uint16_t kGuidanceMovedFkt = 0xCFF;
 enum Fkt {
     kSetVisibility = 0x204, kIsVisible = 0x205, kSwitchVisibility = 0x20E, kTextareaSetText = 0x210,
     kSetLineColor = 0x218, kSetLineWidth = 0x219, kSetFillColor = 0x21B, kSetFillMode = 0x21C, kAddPolygon = 0x21D,
-    kAddCircle = 0x21E, kRemoveAllItems = 0x220, kPotentiometerSetValue = 0x227, kGetSize = 0xC04, kAddCircleDiameter = 0xC09
+    kAddCircle = 0x21E, kRemoveAllItems = 0x220, kPotentiometerSetValue = 0x227, kGetSize = 0xC04,
+    kAddBitmap = 0xC05, kAddCircleDiameter = 0xC09
 };
 enum PolyType { kPolyline = 2, kPolygon = 3 };
-enum { kMaxPoints = 99, kMaxTextChars = 32, kMaxHandle = 255 };
+enum { kMaxPoints = 99, kMaxTextChars = 32, kMaxExtendedUtf16Units = 255, kMaxHandle = 255 };
 const int32_t kMaxAngle = 7200;   // tenths of a degree; the cluster wraps modulo 3600
 
 inline bool isRingNode(uint16_t a) { return a >= 0x0100 && a <= 0x0FFF; }
@@ -87,7 +88,7 @@ inline const char* fktName(uint16_t f) {
         case 0x300: return "TerminalInterface";
         case 0xC03: return "ImageSetTextareaFormat";
         case kGetSize: return "ImageGetSize";
-        case 0xC05: return "ImageAddBitmap";
+        case kAddBitmap: return "ImageAddBitmap";
         case 0xC06: return "ImageSetPositionRotation";
         case 0xC07: return "AnimationSetGuidingStep";
         case 0xC08: return "CurrentGuidingStep";
@@ -306,11 +307,13 @@ inline std::string decodeText(const uint8_t* p, size_t n) {
 }
 
 // The shape each function we send must have. Anything else, IsVisible included, is refused.
-inline bool payloadShapeOk(uint16_t fkt, const std::vector<uint8_t>& p) {
+inline bool payloadShapeOk(uint16_t fkt, const std::vector<uint8_t>& p, bool sixwb = false) {
     size_t n = p.size();
     switch (fkt) {
         case kSetVisibility: return n == 3 && p[2] <= 1;
         case kRemoveAllItems: case kGetSize: return n == 2;
+        case kAddBitmap: return sixwb && n >= 18 && n <= 4096 && (n - 10) % 8 == 0 &&
+                                p[6] == 1 && p[7] == 1 && p[8] == 0;
         case kSwitchVisibility: return n == 4;
         case kPotentiometerSetValue: return n == 7 && p[2] == 0 && p[3] == 0 && p[4] == 0 && p[6] == 0x02;
         case kSetFillColor: case kSetLineColor: case kSetLineWidth: case kSetFillMode: return n == 3;
@@ -319,9 +322,11 @@ inline bool payloadShapeOk(uint16_t fkt, const std::vector<uint8_t>& p) {
             int32_t a0 = rdBe32(&p[11]), a1 = rdBe32(&p[15]);
             return a0 >= -kMaxAngle && a0 <= kMaxAngle && a1 >= -kMaxAngle && a1 <= kMaxAngle;
         }
-        case kTextareaSetText:
-            return n >= 5 && (n - 3) % 2 == 0 && n <= 3 + 2 * (kMaxTextChars + 1) && p[2] == 0x00 && p[n - 1] == 0 &&
-                   p[n - 2] == 0;
+        case kTextareaSetText: {
+            const size_t maxUnits = sixwb ? (size_t)kMaxExtendedUtf16Units : (size_t)kMaxTextChars;
+            return n >= 5 && (n - 3) % 2 == 0 && n <= 3 + 2 * (maxUnits + 1) &&
+                   p[2] == 0 && p[n - 1] == 0 && p[n - 2] == 0;
+        }
         case kAddPolygon:
             return n >= 10 && (p[4] == kPolyline || p[4] == kPolygon) && p[5] >= 1 && p[5] <= kMaxPoints &&
                    n == 6 + 4 * (size_t)p[5];
@@ -343,16 +348,17 @@ struct Call {
 };
 
 // Whether a call keeps every limit: the shape, its handle, and for SwitchVisibility the second handle too.
-inline bool callOk(const Call& c, const HandleSet& allowed) {
-    if (!payloadShapeOk(c.fkt, c.payload) || !allowed.has(c.handle())) return false;
+inline bool callOk(const Call& c, const HandleSet& allowed, bool sixwb = false) {
+    if (!payloadShapeOk(c.fkt, c.payload, sixwb) || !allowed.has(c.handle())) return false;
     if (c.fkt == kSwitchVisibility && !allowed.has(rdBe16(&c.payload[2]))) return false;
     return true;
 }
 
 // The MOST message for one call, without the sender address: most::Client::send fills that in from its registration.
 // False, with out untouched, when a limit is broken.
-inline bool buildCall(uint16_t host, const Call& c, uint32_t tag, const HandleSet& allowed, most::Msg& out) {
-    if (!isRingNode(host) || !callOk(c, allowed)) return false;
+inline bool buildCall(uint16_t host, const Call& c, uint32_t tag, const HandleSet& allowed, most::Msg& out,
+                      bool sixwb = false) {
+    if (!isRingNode(host) || !callOk(c, allowed, sixwb)) return false;
     out.txType = 0;
     out.varTag = 1;
     out.varVal = 0;

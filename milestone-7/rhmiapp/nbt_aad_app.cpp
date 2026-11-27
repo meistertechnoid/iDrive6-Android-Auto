@@ -319,8 +319,7 @@ const long        kAutostartDelayS = 15;
 // updateModel(274, table); state property 24 = 3). Plain labels / Richtext labels are one row, cut at ~34 characters.
 const unsigned    kAboutModel      = 37;
 // HUD profile (rhmiapp-82): radio buttons, BMW's own pattern (SecurityMenu.xml:1159). The
-// choice is one word in /var/opt/aa/cluster; nbt-aad reads it when NBT_CLUSTER is unset. 6WB has no display
-// driver yet, so it is offered with that stated and the daemon says so rather than quietly doing 6WA's job.
+// choice is one word in /var/opt/aa/cluster. nbt-aad reads it at startup when NBT_CLUSTER is unset.
 const char* const kClusterFlag       = "cluster";
 const unsigned    kClusterState      = 54;
 // Car manufacturer choice (rhmiapp-96): /var/opt/aa/vehicle -> the daemon exports NBT_VEHICLE at start, and
@@ -2527,6 +2526,19 @@ bool onVersionFocus(void* /*app*/, const bmw::Parcel& /*p*/) { showVersions(g_ru
 
 bool g_hudCyrillicShown = false;
 void showHudCyrillic(bmw::PluginApp* app);
+bool g_6wbStreetScrollShown = false;
+const unsigned kAct6wbStreetScroll = 485;
+const unsigned k6wbStreetScrollModel = 486;
+
+void show6wbStreetScroll(bmw::PluginApp* app) {
+    app->updateModel(k6wbStreetScrollModel, nbt::flagSet(nbt::k6wbStreetScrollFlagName));
+    g_6wbStreetScrollShown = true;
+}
+bool on6wbStreetScrollToggle(void*, const bmw::Parcel&) {
+    flipFlag(nbt::k6wbStreetScrollFlagName, "6WB street scroll", false);
+    if (g_app) show6wbStreetScroll(g_app);
+    return true;
+}
 
 void statusRunBody(bmw::PluginApp* app);
 
@@ -2561,6 +2573,7 @@ void statusRunBody(bmw::PluginApp* app) {
     if (!g_cpCompatShown) showCpCompat(app);
     if (!g_speechBtShown) showSpeechBt(app);
     if (!g_hudCyrillicShown) showHudCyrillic(app);
+    if (!g_6wbStreetScrollShown) show6wbStreetScroll(app);
     servicePfOps(app);
     if (!g_stopPid) recoverScreenIfUnclean();            // killed / crashed outside Force Stop
     serviceStop();
@@ -2871,6 +2884,7 @@ bool onSettingsFocus(void*, const bmw::Parcel& p) {
     }
     g_ow.onOwnState(nbt::OverlayWatch::kSettingsState, nowMs());   // iDrive is in our menu, not on a car screen
     settingsPageEntered();                               // checkbox snapshot for the restart on leaving
+    if (g_app) show6wbStreetScroll(g_app);
     if (g_app && !f15) {
         showAutostart(g_app);
         showUsbLog(g_app);
@@ -2951,6 +2965,7 @@ bool appOnInit(bmw::PluginApp* self) {
     addAction(self, kActPfUninstall, &onPfUninstallRow);
     addAction(self,248,&onFavouriteBarToggle);
     addAction(self,426,&onHudCyrillicToggle);
+    addAction(self, kAct6wbStreetScroll, &on6wbStreetScrollToggle);
     g_initTime = time(NULL);
     {
         bmw::ActionDelegate d;

@@ -20,9 +20,11 @@ LDLIBS   := -lpthread -lssl -lcrypto -lm
 # The vendored speexdsp resampler, built as C the way the daemon builds it.
 SPEEX := $(ROOT)/src/audio/speex.c
 
-# The guidance runtime with both cluster drivers (KombiNav creates either).
+# The guidance runtime and the cluster drivers KombiNav can select.
 SRC_KOMBI_NAV := src/cluster/j29_client.cpp src/cluster/j29_display.cpp src/cluster/nav_core.cpp \
-                 src/cluster/hud6wa_display.cpp src/cluster/hud_terminal.cpp src/most/client.cpp tests/fake_dsi_client.cpp
+                 src/cluster/hud6wa_display.cpp src/cluster/hud_terminal.cpp src/most/client.cpp tests/fake_dsi_client.cpp \
+                 src/cluster/hud6wb_display.cpp src/cluster/hud6wb_codec.cpp src/cluster/hud6wb_kit.cpp \
+                 src/cluster/grafite_oro/artwork6wb.cpp src/cluster/grafite_oro/hudterminal_palette.cpp
 
 # Each test and the daemon sources it links (beyond its own .cpp).
 SRC_test_aa_proto          := src/wireless_setup.cpp
@@ -61,6 +63,7 @@ SRC_test_ccs_push          :=
 SRC_test_cds_parse         :=
 SRC_test_ctl_wizard        :=
 SRC_test_hud6wa            := $(SRC_KOMBI_NAV)
+SRC_test_hud6wb            := $(SRC_KOMBI_NAV)
 SRC_test_hud_terminal      := src/cluster/hud_terminal.cpp src/most/client.cpp tests/fake_dsi_client.cpp
 SRC_test_hudterm           :=
 SRC_test_hudprobe          :=

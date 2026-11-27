@@ -79,8 +79,10 @@ struct Config {
     bool logBatches;         // a line per finished batch (otherwise only status changes, refusals and failures)
     uint16_t measureHandle;  // ImageGetSize is asked for this handle once the terminal is ready, for the driver to fit
                              // its box to the cluster's real buffer (0 = don't; the shadow mode leaves it 0)
+    bool sixwb;              // 6WB graphics are dispatched in order with a gap between local sends
+    uint32_t graphicsTxType; // vector channel for 6WB (bitmap uploads use the control channel)
     Config() : navFrame(-1), replyMs(10000), copyMs(1500), navQuietMs(5000), maxInFlight(8), maxBatch(32),
-               logBatches(false), measureHandle(0) {}
+               logBatches(false), measureHandle(0), sixwb(false), graphicsTxType(4) {}
 };
 
 // What a batch draws: its own slot's waiting batch is the only one it may take the place of or merge into.
@@ -119,7 +121,7 @@ public:
     explicit Core(const Config& cfg);
 
     // Inputs. now: monotonic ms.
-    void setLink(bool up, uint16_t self, uint32_t now);
+    void setLink(bool up, uint16_t self, uint32_t now, uint32_t registeredTag = 0);
     void setHost(uint16_t host, uint32_t now);
     void onMessage(const most::View& m, uint32_t now);
     void tick(uint32_t now);                  // timeouts and the end of the navigation's route
@@ -131,6 +133,7 @@ public:
 
     // The next message to send, if any, already counted as in flight. After a failed send, sendFailed().
     bool next(uint32_t now, most::Msg& out);
+    void sent(uint32_t now);
     void sendFailed(uint32_t now);
 
     Status status() const { return status_; }
@@ -194,6 +197,8 @@ private:
     int sizeW_, sizeH_;
     std::vector<uint8_t> movedTo_;   // the last place the cluster named in kGuidanceMovedFkt
     bool haveMovedTo_;
+    uint32_t registeredTag_, lastGraphicsMs_;
+    bool haveGraphicsTime_;
     uint32_t textRefusals_;          // TextareaSetText answered with an error, since the start
     uint16_t lastRefusedText_;       // the handle of the last one
 };
@@ -209,7 +214,7 @@ public:
     // take its place.
     virtual bool waiting(int slot) const = 0;
     virtual void reset() = 0;                     // leave kFailed
-    // Until everything submitted is answered: true then; false on the timeout or once the status leaves kReady.
+    // Until submitted work is complete (for 6WB graphics, local dispatch). False on timeout or loss of readiness.
     virtual bool waitIdle(uint32_t ms) = 0;
     // The cluster's picture-buffer size (ImageGetSize), once it has arrived; false until then, or when the transport
     // does not measure. A driver fits its box to it. Default false: a test fake need not implement it.
@@ -279,6 +284,7 @@ private:
     pthread_cond_t cond_;
     pthread_t thread_;
     bool running_, stop_;
+    const bool sixwb_;
     TerminalStats lastHealth_;
 };
 

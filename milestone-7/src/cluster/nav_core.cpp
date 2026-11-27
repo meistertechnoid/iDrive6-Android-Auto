@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)
 #include "cluster/nav_core.hpp"
+#include "cluster/hud6wb_config.hpp"
+#include "cluster/hud6wb_display.hpp"
 #include "nbt_env.hpp"
 #include "nbt_paths.hpp"
 
@@ -200,7 +202,7 @@ void Core::step(const NavView* in, double now, const char* why_none, bool ended)
     off_ = false;
     NavView v = *in;
     // The road as it is stored in shown_, before anything compares the two (an unnamed road is " ").
-    v.road = utf8Prefix(v.road.empty() ? std::string(" ") : v.road, kMaxRoad);
+    v.road = utf8Prefix(v.road.empty() ? std::string(" ") : v.road, d_.roadNameLimit(kMaxRoad));
     if (!renew_ && renewedStep(v)) {
         renew_ = true;                                 // until it is drawn or cleared
         have_next_ = false;                            // and the time rule judges it from now
@@ -401,6 +403,7 @@ KombiNav::KombiNav()
       watch_pid_(-1), watch_fd_(-1),
       watch_thread_(false), watch_spawned_(-1e9), watch_failed_logged_(false), watch_fp_(NULL),
       watch_method_(-1), watch_method_logged_(-1), graph_(NULL), client_(NULL), terminal_(NULL), shadow_(false),
+      sixwb_(false),
       stopHint_(""), stale_shown_(false), display_(NULL), core_(NULL) {
     pthread_mutex_init(&mu_, NULL);
     pthread_mutex_init(&watch_mu_, NULL);
@@ -483,7 +486,8 @@ bool KombiNav::createDisplay(const char* id, most::Client* most) {
         stopHint_ = "not a J29, or a changed instance handle: NBT_KOMBI_NAV_HANDLE";
         return true;
     }
-    if (!strcmp(id, "6wa") || !strcmp(id, "6wa-f15")) {
+    sixwb_ = !strcmp(id, "6wb");
+    if (sixwb_ || !strcmp(id, "6wa") || !strcmp(id, "6wa-f15")) {
         if (!most) {
             printf("[KombiNav] NBT_CLUSTER=%s: no MOST client to send through: cluster arrows disabled\n", id);
             return false;
@@ -492,6 +496,35 @@ bool KombiNav::createDisplay(const char* id, most::Client* most) {
         shadow_ = h && *h && strcmp(h, "on") != 0;
         if (shadow_ && strcmp(h, "log") != 0)
             printf("[KombiNav] NBT_HUDTERM=%s unknown (log, on): shadow mode, nothing is sent\n", h);
+        if (sixwb_) {
+            hudterm::Bmw6wbProfile p;
+            hudterm::configure6wb(p);
+            p.roadShields = envFlag("NBT_6WB_ROAD_SHIELDS") == 1;
+            if (!hudterm::validProfile(p)) {
+                printf("[KombiNav] 6wb: invalid HUDTerminal surfaces\n");
+                return false;
+            }
+            hudterm::Config c;
+            c.sixwb = true;
+            c.graphicsTxType = p.vectorTx;
+            c.handles = hudterm::handlesOf(p);
+            c.navFrame = p.base.frame;
+            c.maxBatch = Hud6wbDisplay::kMaxBatch;
+            c.logBatches = !shadow_;
+            terminal_ = new hudterm::HudTerminal(c);
+            if (!most->requireConsumer("HUDTerminal", terminal_->attach(*most, !shadow_) && terminal_->start())) {
+                printf("[KombiNav] cannot attach the HUDTerminal to the MOST client: cluster arrows disabled\n");
+                return false;
+            }
+            display_ = new Hud6wbDisplay(*terminal_, p, shadow_);
+            settings_.approach = kApproachOff;
+            settings_.hud_bar = envFlag("NBT_KOMBI_NAV_SHOW_BAR") != 0;
+            settings_.show_departure = true;
+            settings_.clear_route_end = true;
+            target_ = "6WB HUDTerminal 82/00 on MOST";
+            stopHint_ = "see the [HudTerm] lines for the 6WB terminal";
+            return true;
+        }
         hudterm::HudProfile p = !strcmp(id, "6wa-f15") ? hudterm::k6waF15 : hudterm::k6wa;   // a copy: env can retune the box on the car without a rebuild
         hudterm::applyHudEnv(p);
         printf("[KombiNav] HUD %s: start canvas %d,%d-%d,%d glyph %d,%d-%d,%d fill %u (fitted to the cluster's own "
@@ -518,7 +551,7 @@ bool KombiNav::createDisplay(const char* id, most::Client* most) {
         stopHint_ = "a call failed, or this cluster is not laid out like the selected HUD profile: see the [HudTerm] lines";
         return true;
     }
-    printf("[KombiNav] NBT_CLUSTER=%s unknown (j29, 6wa, 6wa-f15): cluster arrows disabled\n", id);
+    printf("[KombiNav] NBT_CLUSTER=%s unknown (j29, 6wa, 6wa-f15, 6wb): cluster arrows disabled\n", id);
     return false;
 }
 
@@ -629,6 +662,8 @@ void KombiNav::start(most::Client* most) {
     if (e && *e && e[0] >= '0' && e[0] <= '2' && !e[1]) settings_.inplace = e[0] - '0';
     char clusterFlag[24];
     if (!createDisplay(nbt::clusterProfile(clusterFlag, sizeof(clusterFlag)), most)) return;
+    shown_file_ = kShownFile;
+    if (sixwb_) shown_file_ += ".6wb";
     core_ = new Core(*display_, settings_, &KombiNav::logLine, this);
     if (client_)
         printf("[KombiNav] cluster/HUD arrows %s (%s); KOMBI %s:%u handle 0x%X, approach %s, bar %s, iDrive-route "
@@ -694,12 +729,12 @@ void KombiNav::onFatalSignal() {
 void KombiNav::markShown(bool on, bool force) {
     if (shadow_ || on == marked_) return;
     if (on) {
-        int fd = open(kShownFile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        int fd = open(shown_file_.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd >= 0) close(fd);
         g_mayShow = 1;
         marked_ = true;
     } else if (force || core_->lastCancelOk()) {
-        unlink(kShownFile);
+        unlink(shown_file_.c_str());
         g_mayShow = 0;
         marked_ = false;
     }
@@ -713,17 +748,18 @@ void* KombiNav::workerStub(void* self) {
 void KombiNav::worker() {
     // An arrow left up by a killed daemon (SIGKILL after Force Stop, power loss of the HU only): clear it once. The
     // J29's cancel goes now; another cluster's waits until its transport is ready (tick).
-    if (access(kShownFile, F_OK) == 0 && !client_ && shadow_)
+    const bool stale = access(shown_file_.c_str(), F_OK) == 0;
+    if (stale && !client_ && shadow_)
         printf("[KombiNav] a picture may be left by an earlier live run: the shadow mode leaves it for the next live "
                "run to clear\n");
-    else if (access(kShownFile, F_OK) == 0 && !client_)
+    else if (stale && !client_)
         stale_shown_ = true;
-    if (access(kShownFile, F_OK) == 0 && client_) {
+    if (stale && client_) {
         std::string detail;
         bool ok = client_->cancel(*graph_, 0.0, 5.0, &KombiNav::quitting, this, &detail);
         printf("[KombiNav] arrow possibly left by the previous run: cancel %s%s%s\n", ok ? "OK" : "FAILED",
                ok ? "" : ": ", ok ? "" : detail.c_str());
-        if (ok) unlink(kShownFile);
+        if (ok) unlink(shown_file_.c_str());
         else g_mayShow = 1;   // the file stays: the crash handler and the next start try again
     }
     while (!quitting(this)) {
@@ -744,7 +780,7 @@ void KombiNav::tick(double now) {
             bool ok = display_->clear(&detail);
             printf("[KombiNav] picture possibly left by the previous run: clear %s%s%s\n", ok ? "OK" : "FAILED",
                    ok ? "" : ": ", ok ? "" : detail.c_str());
-            if (ok) unlink(kShownFile);                // else the file stays: the next start tries again
+            if (ok) unlink(shown_file_.c_str());       // else the file stays: the next start tries again
             display_->forget();
         }
     }
@@ -773,7 +809,7 @@ void KombiNav::tick(double now) {
             pthread_mutex_unlock(&watch_mu_);
         }
     }
-    markShown(core_->shown() || core_->sentAny());
+    markShown(pictureMayBeShown());
     if (!enabled_ && !media_enabled_) return;
     if (yield_enabled_) startWatch(now);
 
@@ -797,7 +833,7 @@ void KombiNav::tick(double now) {
         link_failures_ = 0;
         prev_guidance_ = false;
         fallback_noted_ = false;
-        markShown(core_->shown() || core_->sentAny());
+        markShown(pictureMayBeShown());
         return;
     }
     if (disabled_session_ || now < backoff_until_) return;
@@ -855,7 +891,7 @@ void KombiNav::tick(double now) {
             backoff_until_ = now + kLinkBackoffS;
         }
     }
-    markShown(core_->shown() || core_->sentAny());
+    markShown(pictureMayBeShown());
 }
 
 // ---- system-log watch (iDrive route yield) -------------------------------------------------------------------------

@@ -99,6 +99,7 @@ struct LaneDirection {
     bool highlighted;
     LaneDirection() : shape(0), highlighted(false) {}
     LaneDirection(int s, bool h) : shape(s), highlighted(h) {}
+    bool operator==(const LaneDirection& o) const { return shape == o.shape && highlighted == o.highlighted; }
 };
 typedef std::vector<LaneDirection> AaLane;
 
@@ -124,10 +125,14 @@ struct NavView {
     int64_t exit_angle;
     bool has_exit_number;
     int64_t exit_number;     // a roundabout's exit, counted from the entry (1 = the first exit)
+    bool has_next;
+    int next_type;
+    bool next_has_angle;
+    int64_t next_angle, next_exit_number;
     std::vector<AaLane> lanes;   // the step's lanes, left to right (the phone sends them only near the junction)
     NavView() : aa_type(0), aa_unit(0), has_step_m(false), step_m(0), has_step_s(false), step_s(0), pos_seq(0), step_pos_seq(0),
                 step_seq(0), has_dest_m(false), dest_m(0), has_exit_angle(false), exit_angle(0), has_exit_number(false),
-                exit_number(0) {}
+                exit_number(0), has_next(false), next_type(0), next_has_angle(false), next_angle(0), next_exit_number(0) {}
 
     bool sameManeuver(const NavView& o) const {
         return aa_type == o.aa_type && road == o.road && has_exit_angle == o.has_exit_angle &&
@@ -173,6 +178,21 @@ inline bool viewFromMessages(const NavMessages& m, NavView& v) {
         if (pbInt(man, 2, x)) { v.has_exit_number = true; v.exit_number = x; }
         if (pbInt(man, 3, x)) { v.has_exit_angle = true; v.exit_angle = x; }
         v.road = pbText(pbMsg(step, 2), 1);
+        // NavigationState repeats steps in route order. Only the second step can be drawn as a preview.
+        PbReader steps(ns.data, ns.len);
+        PbField sf;
+        unsigned stepIndex = 0;
+        while (steps.next(sf)) {
+            if (sf.num != 1 || sf.wire != 2 || ++stepIndex != 2) continue;
+            PbSpan next = pbMsg(PbSpan(sf.data, sf.len), 1);
+            if (pbInt(next, 1, x) && x > 0 && x <= 50) {
+                v.has_next = true;
+                v.next_type = (int)x;
+                v.next_has_angle = pbInt(next, 3, v.next_angle) && v.next_angle >= 1 && v.next_angle <= 360;
+                if (pbInt(next, 2, x) && x >= 1 && x <= 99) v.next_exit_number = x;
+            }
+            break;
+        }
         // step field 3: repeated NavigationLane {1 repeated LaneDirection {1 shape, 2 is_highlighted}}
         PbReader lr(step.data, step.len);
         PbField lf;

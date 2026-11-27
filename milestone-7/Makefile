@@ -65,6 +65,11 @@ SRCS = src/main.cpp \
        src/cluster/nav_core.cpp \
        src/cluster/hud_terminal.cpp \
        src/cluster/hud6wa_display.cpp \
+       src/cluster/hud6wb_display.cpp \
+       src/cluster/hud6wb_codec.cpp \
+       src/cluster/hud6wb_kit.cpp \
+       src/cluster/grafite_oro/artwork6wb.cpp \
+       src/cluster/grafite_oro/hudterminal_palette.cpp \
        src/cluster/ric_media.cpp \
        src/gesture_sniff.cpp \
        src/volume_osd.cpp \
@@ -111,13 +116,16 @@ PLUGIN_RPATH    = -Wl,-rpath,/lib:/usr/lib:/fs/sda0/repository/istep/lib:/opt/hm
 # RHMI_LIBDIR: copies of the car's libAppFramework.A.so and libCoreFramework.A.so (opt/hmi/ID5/lib in the dump).
 RHMI_LIBDIR ?= ./rhmiapp/lib
 RHMI_LIBS = $(wildcard $(RHMI_LIBDIR)/libAppFramework.A.so $(RHMI_LIBDIR)/libCoreFramework.A.so)
+# The HMI loads the firmware's libstdc++. Keep the pre-GCC-5 string ABI and the C++11
+# language mode, where GCC does not import C++14 sized operator delete by default.
+RHMI_ABI_FLAGS = -D_GLIBCXX_USE_CXX11_ABI=0 -Wc,-std=gnu++0x
 
 .PHONY: rhmiapp
 rhmiapp: rhmiapp/libNbtAad.so
 
 rhmiapp/libNbtAad.so: rhmiapp/nbt_aad_app.cpp rhmiapp/overlay_watch.hpp src/favourite_colour.hpp src/favourite_picker.hpp
 	@echo [BUILD] PluginApp $@
-	$(PLUGIN_CXX) $(PLUGIN_CXXFLAGS) -shared -Wl,-soname,libNbtAad.so -o $@ rhmiapp/nbt_aad_app.cpp $(RHMI_LIBS) -Wl,--allow-shlib-undefined -lang-c++
+	$(PLUGIN_CXX) $(PLUGIN_CXXFLAGS) $(RHMI_ABI_FLAGS) -shared -Wl,-soname,libNbtAad.so -o $@ rhmiapp/nbt_aad_app.cpp $(RHMI_LIBS) -Wl,--allow-shlib-undefined -lang-c++
 	@echo [DONE] Built $@ - install with NbtAad.manifest, NbtAad.xml, NbtAad_ALL_*.zip into Plugins/NbtAad
 
 .PHONY: plugin

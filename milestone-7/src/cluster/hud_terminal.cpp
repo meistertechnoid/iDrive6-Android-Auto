@@ -12,6 +12,8 @@ namespace hudterm {
 
 namespace {
 
+const uint32_t k6wbGraphicsIntervalMs = 15;
+
 uint32_t nowMs() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -55,7 +57,7 @@ Core::Core(const Config& cfg)
       lastNavMs_(0), status_(kOffline), changed_(false), haveCurrent_(false),
       nextCall_(0), batchStartMs_(0), recent_(cfg.copyMs), tag_(1), epoch_(0),
       measureDue_(false), measureInFlight_(false), measureLate_(false), measureSentMs_(0), haveSize_(false), sizeW_(0), sizeH_(0),
-      haveMovedTo_(false), textRefusals_(0), lastRefusedText_(0) {
+      haveMovedTo_(false), textRefusals_(0), lastRefusedText_(0), registeredTag_(0), lastGraphicsMs_(0), haveGraphicsTime_(false) {
     if (cfg_.maxInFlight == 0) cfg_.maxInFlight = 1;
     memset(&stats_, 0, sizeof(stats_));
 }
@@ -139,7 +141,7 @@ void Core::fail(const char* why, uint32_t now) {
 
 // The navigation state is kept across a link change: a route that ends while the link is down leaves us yielded until
 // the navigation's next route ends, which is the safe side.
-void Core::setLink(bool up, uint16_t self, uint32_t now) {
+void Core::setLink(bool up, uint16_t self, uint32_t now, uint32_t registeredTag) {
     if (!up) {
         if (!linkUp_) return;
         linkUp_ = false;          // self_ stays, so late answers to our old address are not taken for the navigation
@@ -152,9 +154,11 @@ void Core::setLink(bool up, uint16_t self, uint32_t now) {
         refresh("no usable address", now);
         return;
     }
-    if (linkUp_ && self == self_) return;
+    if (linkUp_ && self == self_ && (!cfg_.sixwb || registeredTag_ == registeredTag)) return;
+    if (cfg_.sixwb && status_ == kReady) ++epoch_;
     linkUp_ = true;
     self_ = self;
+    registeredTag_ = registeredTag;
     failed_ = false;
     dropWork(now);
     char why[48];
@@ -168,6 +172,7 @@ void Core::setHost(uint16_t host, uint32_t now) {
     char why[64];
     if (host) snprintf(why, sizeof(why), "82/00 host %04X%s", host, host_ ? " (changed)" : "");
     else snprintf(why, sizeof(why), "no 82/00 host on a ring node in the registry");
+    if (cfg_.sixwb && status_ == kReady) ++epoch_;
     host_ = host;
     failed_ = false;
     navActive_ = false;
@@ -196,7 +201,7 @@ SubmitResult Core::submit(const Batch& b, uint32_t) {
     }
     for (size_t i = 0; i < b.calls.size(); ++i) {
         const Call& c = b.calls[i];
-        if (callOk(c, cfg_.handles)) continue;
+        if ((!cfg_.sixwb || c.fkt != kGetSize) && callOk(c, cfg_.handles, cfg_.sixwb)) continue;
         ++stats_.refused;
         printf("[HudTerm] batch '%s' refused: call %u, %03X %s handle %u, %u bytes, breaks a limit\n", b.label.c_str(),
                (unsigned)i, c.fkt, fktName(c.fkt), c.handle(), (unsigned)c.payload.size());
@@ -293,32 +298,44 @@ bool Core::next(uint32_t now, most::Msg& out) {
     if (!haveCurrent_ || nextCall_ >= current_.calls.size()) return false;
     const Call& c = current_.calls[nextCall_];
     if (c.afterReplies && !inFlight_.empty()) return false;
-    if (!buildCall(host_, c, tag_, cfg_.handles, out)) {   // checked at submit: only a host change could do this
+    if (cfg_.sixwb && haveGraphicsTime_ && left(lastGraphicsMs_, k6wbGraphicsIntervalMs, now)) return false;
+    if (!buildCall(host_, c, cfg_.sixwb ? registeredTag_ : tag_, cfg_.handles, out, cfg_.sixwb)) {
         fail("a queued call no longer builds", now);
         return false;
     }
     if (nextCall_ == 0) batchStartMs_ = now;
     ++tag_;
     ++nextCall_;
-    InFlight f;
-    f.fkt = c.fkt;
-    f.handle = c.handle();
-    f.sentMs = now;
-    f.allowTimeout = c.allowTimeout;
-    inFlight_.push_back(f);
-    recent_.add(c.fkt, f.handle, now);
+    if (cfg_.sixwb) {
+        out.txType = c.fkt == kAddBitmap ? 0 : cfg_.graphicsTxType;
+    } else {
+        InFlight f;
+        f.fkt = c.fkt;
+        f.handle = c.handle();
+        f.sentMs = now;
+        f.allowTimeout = c.allowTimeout;
+        inFlight_.push_back(f);
+        recent_.add(c.fkt, f.handle, now);
+    }
     ++stats_.calls;
     return true;
 }
 
 void Core::sendFailed(uint32_t now) { fail("the MOST client did not send a call", now); }
 
+void Core::sent(uint32_t now) {
+    if (!cfg_.sixwb) return;
+    haveGraphicsTime_ = true;
+    lastGraphicsMs_ = now;
+    finishIfDone(now);
+}
+
 void Core::finishIfDone(uint32_t now) {
     if (!haveCurrent_ || nextCall_ < current_.calls.size() || !inFlight_.empty()) return;
     ++stats_.batchesDone;
     if (cfg_.logBatches)
-        printf("[HudTerm] batch '%s': %u calls answered in %u ms\n", current_.label.c_str(),
-               (unsigned)current_.calls.size(), now - batchStartMs_);
+        printf("[HudTerm] batch '%s': %u calls %s in %u ms\n", current_.label.c_str(),
+               (unsigned)current_.calls.size(), cfg_.sixwb ? "dispatched" : "answered", now - batchStartMs_);
     haveCurrent_ = false;
     if (pending_.empty()) {
         current_ = Batch();
@@ -333,6 +350,16 @@ void Core::finishIfDone(uint32_t now) {
 void Core::onMessage(const most::View& m, uint32_t now) {
     if (m.fblock != kFBlock || m.inst != kInst || !host_) return;
     if (self_ && m.src == self_) return;                      // our own, if the server shows them to us
+    if (cfg_.sixwb && m.src == host_ && (m.dst == self_ || (linkUp_ && m.hdrTag == registeredTag_))) {
+        // The registered header identifies replies and mirrors, but does not identify individual setters.
+        // Replies are diagnostic. Waiting for them would stall terminals that omit them.
+        if (m.op == most::kOpErrorAck || m.op == most::kOpError) {
+            ++stats_.errors;
+        } else if (m.op == most::kOpResultAck || m.op == most::kOpStatus) {
+            ++stats_.answers;
+        }
+        return;
+    }
     if (self_ && m.dst == self_) {
         if (m.src == host_) onAnswer(m, now);
         return;
@@ -419,7 +446,7 @@ void Core::onAnswer(const most::View& m, uint32_t now) {
 // Clearing up (RemoveAllItems, empty texts, other instances switched off) is not drawing.
 static bool draws(const most::View& m) {
     switch (m.fkt) {
-        case kSwitchVisibility: case kAddPolygon: case kAddCircle: case kAddCircleDiameter: case 0xC05:   // ImageAddBitmap
+        case kSwitchVisibility: case kAddPolygon: case kAddCircle: case kAddCircleDiameter: case kAddBitmap:
             return true;
         case kTextareaSetText:                    // handle, encoding byte, then the text
             for (size_t i = 3; i < m.len; ++i)
@@ -431,9 +458,12 @@ static bool draws(const most::View& m) {
 }
 
 void Core::onNav(const most::View& m, uint32_t now) {
+    const bool frame = m.fkt == kSetVisibility && m.len >= 3 && cfg_.navFrame > 0 &&
+                       rdBe16(m.data) == cfg_.navFrame;
+    if (cfg_.sixwb && !frame && !draws(m)) return;
     ++stats_.navMsgs;
     lastNavMs_ = now;
-    if (m.fkt == kSetVisibility && m.len >= 3 && cfg_.navFrame > 0 && rdBe16(m.data) == cfg_.navFrame) {
+    if (frame) {
         routeOn_ = m.data[2] != 0;
         frameOff_ = !routeOn_;
     } else if (draws(m) && !frameOff_) {
@@ -512,6 +542,8 @@ void Core::tick(uint32_t now) {
 
 uint32_t Core::msUntilDeadline(uint32_t now) const {
     uint32_t d = 0xFFFFFFFFu;
+    if (cfg_.sixwb && status_ == kReady && haveCurrent_ && haveGraphicsTime_)
+        d = left(lastGraphicsMs_, k6wbGraphicsIntervalMs, now);
     if (status_ == kReady && !inFlight_.empty()) {
         uint32_t t = left(inFlight_[0].sentMs, cfg_.replyMs, now);
         if (t < d) d = t;
@@ -534,7 +566,7 @@ bool Core::takeStatusChange(Status& s) {
 
 HudTerminal::HudTerminal(const Config& cfg)
     : core_(cfg), client_(NULL), send_(NULL), sendUser_(NULL), statusCb_(NULL), statusUser_(NULL), running_(false),
-      stop_(false) {
+      stop_(false), sixwb_(cfg.sixwb) {
     memset(&lastHealth_, 0, sizeof(lastHealth_));
     pthread_mutex_init(&lock_, NULL);
     pthread_condattr_t a;
@@ -707,8 +739,9 @@ void HudTerminal::onGuidanceMoved(const most::View& m) {
 }
 
 void HudTerminal::onLink(bool up, uint16_t self) {
+    const uint32_t tag = up && sixwb_ && client_ ? client_->registeredHeaderTag() : 0;
     pthread_mutex_lock(&lock_);
-    core_.setLink(up, self, nowMs());
+    core_.setLink(up, self, nowMs(), tag);
     wake();
     pthread_mutex_unlock(&lock_);
 }
@@ -737,7 +770,7 @@ void HudTerminal::regTramp(const std::vector<most::RegistryEntry>& reg, void* se
 
 bool HudTerminal::clientSend(const most::Msg& m, void* self) {
     HudTerminal* t = static_cast<HudTerminal*>(self);
-    return t->client_ && t->client_->send(m);
+    return t->client_ && t->client_->send(m, t->sixwb_);
 }
 
 void* HudTerminal::threadMain(void* self) {
@@ -760,7 +793,8 @@ void HudTerminal::run() {
             bool ok = fn && fn(m, user);
             pthread_mutex_lock(&lock_);
             now = nowMs();
-            if (!ok) core_.sendFailed(now);
+            if (ok) core_.sent(now);
+            else core_.sendFailed(now);
         }
         Status s;
         if (core_.takeStatusChange(s)) {

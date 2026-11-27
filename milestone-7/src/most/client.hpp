@@ -95,10 +95,11 @@ public:
 
     // This client's MOST address from its registration, 0 while unregistered or refused.
     uint16_t selfAddress() const;
+    uint32_t registeredHeaderTag() const;
 
     // Sends one command (see the top of this file), from any thread. m.src is ignored: the registered address is used.
     // False when refused here or not handed to the server; the answer, if any, arrives on a route like any message.
-    bool send(const Msg& m);
+    bool send(const Msg& m, bool useRegisteredHeader = false);
 
     // One line with the counters since the last call, so a silent client still shows. From main's loop, every 60 s.
     void logHealth();

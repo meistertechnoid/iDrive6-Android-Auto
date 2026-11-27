@@ -48,7 +48,6 @@ companion app, developer mode, or "Start head unit server". iDrive's own binarie
 >     no arrow and no distance (direction 0, car-verified on the J29). It also shows in the HUD. A real Android Auto
 >     turn replaces it; it is cancelled when playback stops. Tuning: `NBT_KOMBI_MEDIA_DIR`, `_DIST`, `_UNIT`,
 >     `_CHARS`, and the search mode `NBT_KOMBI_MEDIA_CYCLE=dir|unit`.
->   - `6wb`: no driver yet, nothing is shown.
 >   `NBT_KOMBI_MEDIA` belongs to this feature.
 > - **Native Functionality Media Controls Restore (beta)** (the old "Media Controls for LCI Steering Wheels") now also
 >   turns on, in native audio mode, the Android Auto track title in the J29 cluster's track list and the thumb-wheel
@@ -1082,10 +1081,14 @@ Leave these unset unless you are testing.
 | `NBT_KOMBI_TRACKS_IF`, `NBT_KOMBI_TRACKS_INDEX` | Override the capture interface. By default the daemon uses the interface for an on-link route to the KOMBI, or `vlan73` if it cannot find one. The default text model index is `0x7E01`. |
 | `NBT_MFL_WHEEL_FALLBACK=1` | Enable the Native Audio thumb-wheel fallback on other cars that report MOST `C30` rotation around `7F` and a `C31` press. With media controls restored, turn then press within two seconds. Once an Ethernet track list or mapped Next/Previous key is seen, the fallback stops for that daemon run. The `6wa-f15` BMW profile enables this policy by default. Other profiles use the upstream wheel policy unless explicitly configured. Set to `0` to disable it. |
 | `NBT_MFL_WHEEL_INVERT=1` | Reverse the thumb-wheel fallback direction. |
-| `NBT_KOMBI_NAV_SHOW_BAR` | With `6wa-f15`, the factory HUD distance bar is enabled by default and counts down from the first reported distance to each turn. Set `0` to hide it. On J29, `1` keeps the factory distance bar visible. |
+| `NBT_KOMBI_NAV_SHOW_BAR` | On `6wa-f15` and `6wb`, the distance bar is enabled by default. Set `0` to hide it. On J29, `1` keeps the factory distance bar visible. |
 | `NBT_KOMBI_NAV_YIELD=0` | Don't watch the system log for iDrive routes |
 | `NBT_KOMBI_NAV_LANES=0` | No lane row in the cluster / HUD (the arrows stay) |
 | `NBT_CLUSTER=6wa-f15` | Opt in to the BMW F15 layout on MOST HUDTerminal 82/00. In iDrive, open Android Auto → Settings → HUD profiles, choose **F-Series (6WA-F15)**, then restart Android Auto. The iDrive guidance display setting selects the windshield or the instrument cluster. |
+| `NBT_CLUSTER=6wb` | Experimental BMW 6WB navigation profile for the F31 MOST HUDTerminal layout. In iDrive, enable **Turn arrows in cluster/HUD**, select **F-Series (6WB)** under Android Auto → Settings → HUD profiles, then use **Restart** and start a route on the phone. An explicit `NBT_CLUSTER` in `nbt-aad.env` overrides the menu choice. |
+| `NBT_6WB_STREET_SCROLL` | The **Scroll street names (6WB)** Settings checkbox starts or stops scrolling on the active 6WB route. Off by default. Set `1` or `0` in `nbt-aad.env` to override the checkbox. |
+| `NBT_6WB_STREET_SCROLL_WIDTH` | When scrolling is enabled, the width of the visible text window in characters, including any road-shield padding (default `24`, range `8`.. `255`). Tune for the cluster's font and layout. |
+| `NBT_HUDTERM=log` | Render and log HUDTerminal commands for the selected MOST profile. With the variable unset or set to `on`, the selected profile sends commands once its terminal is ready. |
 | `NBT_HUD_JUNCTION=0` | 6WA cluster (`NBT_CLUSTER=6wa`): keep the arrow all the way to the turn. By default the arrow gives way to a junction view at the main prompt (see `NBT_KOMBI_NAV_MAIN_S`) or within `NBT_HUD_NEAR_M`, like the factory navigation's near view: the maneuver's roads (in and out, both branches of a fork or an exit, a roundabout's ring and exit number) with the route drawn over them, its tail shorter in four steps on the way in. Android Auto sends no map, so other side roads are not drawn |
 | `NBT_HUD_NEAR_M` | 6WA: the junction view comes in this close to the maneuver whatever the time (default `300`, `50`..`2000`) |
 | `NBT_HUD_LANES=1` | 6WA: the phone's lanes in the cluster's lane layer, left of the picture. Off by default: where the cluster shows that layer is not known yet |

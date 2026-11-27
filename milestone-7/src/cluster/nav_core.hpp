@@ -215,6 +215,7 @@ private:
     bool enabledNow() const;
     bool mediaEnabledNow() const;
     void markShown(bool on, bool force = false);
+    bool pictureMayBeShown() const { return core_->sentAny() || (!sixwb_ && core_->shown()); }
 
     pthread_mutex_t mu_;
     NavMessages msgs_;           // guarded by mu_
@@ -264,8 +265,10 @@ private:
 
     Graph* graph_;                   // j29
     KombiClient* client_;            // j29
-    hudterm::HudTerminal* terminal_; // 6wa
-    bool shadow_;                    // 6wa: NBT_HUDTERM=log
+    hudterm::HudTerminal* terminal_; // 6WA / 6WB
+    bool shadow_;                    // NBT_HUDTERM=log
+    bool sixwb_;
+    std::string shown_file_;
     std::string target_;             // for the log: what the driver talks to
     const char* stopHint_;           // for the log: why a driver may stop for the session
     bool stale_shown_;               // a picture a killed daemon left: cleared once the transport is ready

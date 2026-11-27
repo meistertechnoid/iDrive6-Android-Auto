@@ -33,4 +33,15 @@ auto = next(c for c in vehicle.iter('radiobutton') if c.get('text') == 'Auto')
 assert cyrillic.get('action') != auto.get('action'), 'Cyrillic and manufacturer Auto share an action'
 assert handlers[cyrillic.get('action')] == 'onHudCyrillicToggle'
 assert handlers[auto.get('action')] == 'onVehiclePick<0>'
+scroll = next(c for c in main.iter('checkbox') if c.get('text') == 'Scroll street names (6WB)')
+assert handlers[scroll.get('action')] == 'on6wbStreetScrollToggle'
+assert scroll.get('action') in {a.get('id') for a in main.find('actions')}
+assert scroll.get('model') == constants['k6wbStreetScrollModel']
+assert any(m.get('id') == scroll.get('textModel') and m.get('textId') == '409'
+           for m in main.iter('textIdModel'))
+text_ids = {m.get('id'): m.get('textId') for m in main.iter('textIdModel')}
+version = next(s for s in main.find('hmiStates') if s.get('id') == '15')
+version_labels = {c.get('id'): c.get('model') for c in version.iter('label')}
+assert version_labels == {'171': constants['kDaemonVerModel'], '172': constants['kAppVerModel']}
+assert all(model not in text_ids for model in version_labels.values()), 'Version values require Richtext models'
 print('test_rhmi_actions: all passed')

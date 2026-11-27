@@ -2521,7 +2521,7 @@ int main(int argc, char* argv[]) {
     }
     g_tcp = &tcp_server;
     g_kombiNav.start(&g_most);     // idle until "Turn arrows in cluster/HUD" (or NBT_KOMBI_NAV=1) is on; before
-                                   // g_most starts: NBT_CLUSTER=6wa attaches to it
+                                   // g_most starts: the 6WA and 6WB drivers attach to it
     char clusterFlag[24];
     const char* profile = nbt::clusterProfile(clusterFlag, sizeof(clusterFlag));
     const bool f15Wheel = car.make == nbt::MAKE_BMW && !strcmp(profile, "6wa-f15");

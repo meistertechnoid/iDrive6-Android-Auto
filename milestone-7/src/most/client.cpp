@@ -185,6 +185,13 @@ uint16_t Client::selfAddress() const {
     return a;
 }
 
+uint32_t Client::registeredHeaderTag() const {
+    pthread_mutex_lock(&lock_);
+    uint32_t tag = clientId_;
+    pthread_mutex_unlock(&lock_);
+    return tag;
+}
+
 bool Client::request(DsiClient* c, uint32_t id, const std::vector<uint8_t>& p) {
     pthread_mutex_lock(&sendLock_);
     bool ok = c->sendRequest(id, p);
@@ -201,7 +208,7 @@ bool Client::notify(DsiClient* c, uint32_t attr) {
 
 // The DSI library's comment says a send belongs on the connection thread. Sending from another thread, with one lock
 // around every send, is what tools/hud_probe did on the car, and the cluster answered every call.
-bool Client::send(const Msg& m) {
+bool Client::send(const Msg& m, bool useRegisteredHeader) {
     bool allowed = false;
     uint16_t key = registryKey(m.fblock, m.inst);
     for (int i = 0; i < nSendKeys_; ++i)
@@ -220,10 +227,12 @@ bool Client::send(const Msg& m) {
 
     Msg out = m;
     out.src = self;
+    if (useRegisteredHeader) out.hdrTag = client;
     std::vector<uint8_t> req;
     putLe32(req, client);
     std::vector<uint8_t> body = buildMessage(out);
     req.insert(req.end(), body.begin(), body.end());
+    if (useRegisteredHeader) req.resize((req.size() + 3) & ~size_t(3), 0);
     bool ok = request(&dsi_, kReqProcessMessage, req);
     pthread_mutex_lock(&lock_);
     if (ok) ++total_.sent;
