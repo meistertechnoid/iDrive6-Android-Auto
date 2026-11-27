@@ -444,6 +444,33 @@ static void testCopiesIgnored() {
     assert(k.status() == kNavActive && k.stats().navMsgs == 1);
 }
 
+static void test6wbDelayedVisibilityCopy() {
+    Config c = config();
+    c.sixwb = true;
+    Core k = readyCore(c);
+    Batch b("6wb frame");
+    b.add(kSetVisibility, setVisibility(kFrame, true));
+    most::Msg m;
+    assert(k.submit(b, 100) == kQueued && k.next(100, m));
+    k.sent(100);
+    Wire mirror = copyOf(m);
+    mirror.v.hdrTag = 0x52;
+    k.onMessage(mirror.v, 4100);
+    assert(k.status() == kReady && k.stats().copies == 1 && k.stats().navMsgs == 0);
+
+    Wire off = navAnswer(kSetVisibility, setVisibility(kFrame, false));
+    off.v.hdrTag = 0x52;
+    k.onMessage(off.v, 4101);
+    assert(k.status() == kNavActive);
+
+    Core factory = readyCore(c);
+    assert(factory.submit(b, 100) == kQueued && factory.next(100, m));
+    factory.sent(100);
+    Wire on = navCall(kSetVisibility, setVisibility(kFrame, true));
+    factory.onMessage(on.v, 4100);
+    assert(factory.status() == kNavActive);
+}
+
 static void testOwnAndForeignIgnored() {
     Core k = readyCore();
     Wire own(kSelf, kHost, kSetVisibility, most::kOpStartResultAck, setVisibility(kFrame, true));
@@ -1029,6 +1056,7 @@ int main() {
     testSlots();
     testEpoch();
     testCopiesIgnored();
+    test6wbDelayedVisibilityCopy();
     testOwnAndForeignIgnored();
     testNavTakeoverMidBatch();
     testNavFinishes();

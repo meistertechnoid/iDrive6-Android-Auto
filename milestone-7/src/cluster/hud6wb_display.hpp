@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)
+// Connects the shared navigation runtime to the 6WB HUDTerminal display.
+// Связывает общую логику навигации с выводом на 6WB через HUDTerminal.
 #ifndef CLUSTER_HUD6WB_DISPLAY_HPP
 #define CLUSTER_HUD6WB_DISPLAY_HPP
 #include "cluster/display.hpp"

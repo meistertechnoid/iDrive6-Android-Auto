@@ -425,15 +425,17 @@ public:
     explicit RecentCalls(uint32_t windowMs = 1500) : windowMs_(windowMs), next_(0) {
         for (int i = 0; i < kSlots; ++i) used_[i] = false;
     }
-    void add(uint16_t fkt, uint16_t handle, uint32_t now) {
+    void add(uint16_t fkt, uint16_t handle, uint32_t now, int value = -1) {
         fkt_[next_] = fkt; handle_[next_] = handle; t_[next_] = now; used_[next_] = true;
+        value_[next_] = value;
         next_ = (next_ + 1) % kSlots;
     }
     bool isCopy(uint16_t fkt, const uint8_t* data, size_t len, uint32_t now) const {
         if (len < 2) return false;
         uint16_t h = rdBe16(data);
         for (int i = 0; i < kSlots; ++i)
-            if (used_[i] && fkt_[i] == fkt && handle_[i] == h && now - t_[i] <= windowMs_) return true;
+            if (used_[i] && fkt_[i] == fkt && handle_[i] == h && now - t_[i] <= windowMs_ &&
+                (value_[i] < 0 || (len >= 3 && data[2] == value_[i]))) return true;
         return false;
     }
     void clear() { for (int i = 0; i < kSlots; ++i) used_[i] = false; }
@@ -442,6 +444,7 @@ private:
     uint16_t fkt_[kSlots];
     uint16_t handle_[kSlots];
     uint32_t t_[kSlots];
+    int value_[kSlots];
     bool used_[kSlots];
     int next_;
 };

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)
+// Exercises 6WB guidance rendering and HUDTerminal command dispatch.
+// Проверяет отрисовку подсказок 6WB и отправку команд HUDTerminal.
 #include "cluster/hud6wb_codec.hpp"
 #include "cluster/hud6wb_display.hpp"
 #include "cluster/nav_core.hpp"

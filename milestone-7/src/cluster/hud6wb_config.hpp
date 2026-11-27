@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)
+// Applies 6WB profile overrides from nbt-aad.env when the daemon starts.
+// Применяет настройки профиля 6WB из nbt-aad.env при запуске демона.
 #ifndef CLUSTER_HUD6WB_CONFIG_HPP
 #define CLUSTER_HUD6WB_CONFIG_HPP
 #include "cluster/hud6wb_profile.hpp"
@@ -47,6 +49,8 @@ inline void configure6wb(Bmw6wbProfile& p) {
     p.base.streetChars = sixwbNumber("NBT_6WB_STREET_CHARS", p.base.streetChars, 1, kMaxExtendedUtf16Units);
     p.streetScrollWidth = sixwbNumber("NBT_6WB_STREET_SCROLL_WIDTH", p.streetScrollWidth, 8, kMaxExtendedUtf16Units);
     p.base.distanceChars = sixwbNumber("NBT_6WB_DISTANCE_CHARS", p.base.distanceChars, 1, 8);
+    // To move the central artwork down, increase Y and keep Y + height within the main buffer.
+    // Чтобы опустить большой манёвр, увеличьте Y так, чтобы Y + высота помещались в основном буфере.
     int x = sixwbNumber("NBT_6WB_ARROW_X", p.base.glyph.x0, 0, p.main.width - 2);
     int y = sixwbNumber("NBT_6WB_ARROW_Y", p.base.glyph.y0, 0, p.main.height - 2);
     int w = sixwbNumber("NBT_6WB_ARROW_WIDTH", p.base.glyph.x1 - p.base.glyph.x0 + 1, 32, p.main.width);

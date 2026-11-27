@@ -2,6 +2,8 @@
 // Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)
 // Wire layouts and RLE32 ABGR algorithm adapted from JayJay3071/nbt-android-auto,
 // src/android_auto/knob/nbt_cluster.cpp at 0fb9fd2. No x86 DSI code is used.
+// Declares the helpers that build 6WB text and bitmap payloads.
+// Объявляет функции формирования текстовых и растровых данных для 6WB.
 #ifndef CLUSTER_HUD6WB_CODEC_HPP
 #define CLUSTER_HUD6WB_CODEC_HPP
 #include "cluster/hudterm.hpp"

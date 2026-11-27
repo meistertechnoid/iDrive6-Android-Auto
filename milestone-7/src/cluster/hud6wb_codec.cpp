@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)
 // Adapted algorithms: JayJay3071/nbt-android-auto 0fb9fd2 (see BMW_6WB.md).
+// Encodes text and bitmap payloads for the 6WB HUDTerminal protocol.
+// Кодирует текст и растровые изображения для протокола HUDTerminal 6WB.
 #include "cluster/hud6wb_codec.hpp"
 namespace nbt {
 namespace hudterm {

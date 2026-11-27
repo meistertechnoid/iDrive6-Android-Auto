@@ -1,3 +1,5 @@
+// Fits Grafite Oro artwork to the target rectangle and builds maneuver and lane scenes.
+// Вписывает графику Grafite Oro в заданную область и формирует сцены манёвров и полос.
 #include "artwork6wb.hpp"
 #include <algorithm>
 #include <limits>

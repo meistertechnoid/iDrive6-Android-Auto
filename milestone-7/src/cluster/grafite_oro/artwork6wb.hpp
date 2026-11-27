@@ -1,3 +1,5 @@
+// Defines the artwork geometry and input data used to render 6WB scenes.
+// Описывает геометрию графики и входные данные для отрисовки сцен 6WB.
 #ifndef NBT_GRAFITE_ORO_ARTWORK_HPP
 #define NBT_GRAFITE_ORO_ARTWORK_HPP
 #include <vector>

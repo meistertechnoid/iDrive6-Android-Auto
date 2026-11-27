@@ -1,3 +1,5 @@
+// Declares the command encoders for the central maneuver and lane guidance.
+// Объявляет функции формирования команд для большого манёвра и подсказок по полосам.
 #ifndef NBT_HUD6WB_KIT_HPP
 #define NBT_HUD6WB_KIT_HPP
 #include "cluster/grafite_oro/hudterminal_palette.hpp"

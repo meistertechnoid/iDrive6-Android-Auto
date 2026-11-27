@@ -1,3 +1,5 @@
+// Converts Grafite Oro scenes into drawing commands for the 6WB palette and buffers.
+// Преобразует сцены Grafite Oro в команды рисования с учётом палитры и буферов 6WB.
 #include "cluster/hud6wb_kit.hpp"
 #include <algorithm>
 #include <math.h>

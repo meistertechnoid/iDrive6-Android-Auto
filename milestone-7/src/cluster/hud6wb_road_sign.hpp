@@ -1,3 +1,5 @@
+// Extracts a road number from the street label and draws an optional route shield.
+// Извлекает номер дороги из названия улицы и рисует опциональный дорожный щиток.
 #ifndef NBT_HUD6WB_ROAD_SIGN_HPP
 #define NBT_HUD6WB_ROAD_SIGN_HPP
 

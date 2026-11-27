@@ -2,6 +2,8 @@
 // Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)
 // BMW 6WB experimental profile. Graphics surface layout from the supplied 6WB profile.
 // Wire layouts are based on JayJay3071/nbt-android-auto 0fb9fd2 (docs/CLUSTER-HUDTERMINAL.md).
+// Defines the 6WB buffer sizes, element handles and default layout.
+// Задаёт размеры буферов, идентификаторы элементов и исходную разметку 6WB.
 #ifndef CLUSTER_HUD6WB_PROFILE_HPP
 #define CLUSTER_HUD6WB_PROFILE_HPP
 #include "cluster/hud6wa_profile.hpp"
@@ -36,6 +38,8 @@ struct Bmw6wbProfile {
         base.unit = 0x1c;
         base.bufA = main.a;
         base.bufB = main.b;
+        // The central maneuver uses the full 221 x 158 buffer by default.
+        // По умолчанию большой манёвр использует весь буфер 221 × 158.
         Rect c = {0, 0, 220, 157};
         base.canvas = c;
         // Use the measured image coordinate range for newly fitted artwork.

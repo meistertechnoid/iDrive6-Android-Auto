@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Required Notice: Copyright (c) 2026 nanaisu - NBT-AAD (https://github.com/Sq00ky/Supra-iDrive6-Android-Auto)
+// Updates the maneuver, lanes, text and distance bar on their respective surfaces.
+// Обновляет манёвр, полосы, текст и шкалу расстояния в соответствующих областях.
 #include "cluster/hud6wb_display.hpp"
 #include "cluster/hud6wb_codec.hpp"
 #include "cluster/grafite_oro/miniature_raster.hpp"
@@ -146,6 +148,8 @@ Batch Hud6wbDisplay::render(const NavView& v, bool scrolling, bool& signVisible)
     bar.visible = bar.visible && settings_.hud_bar;
     sixwbkit::Maneuver::Value m = GrafiteKit::maneuver(v.aa_type);
     sixwbkit::PlanePolicy::Value policy = sixwbkit::describe(m).policy;
+    // Pass the configured drawing rectangle to the central maneuver renderer.
+    // Передаём настроенную область отрисовщику большого манёвра.
     const Rect& useful = p_.base.glyph;
     uint16_t target = other(mainVisible_, p_.main);
     uint16_t lane = other(laneVisible_, p_.lanes);

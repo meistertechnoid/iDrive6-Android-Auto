@@ -55,7 +55,7 @@ Core::Core(const Config& cfg)
     : cfg_(cfg), linkUp_(false), self_(0), host_(0), failed_(false), navActive_(false), routeOn_(false),
       frameOff_(false),
       lastNavMs_(0), status_(kOffline), changed_(false), haveCurrent_(false),
-      nextCall_(0), batchStartMs_(0), recent_(cfg.copyMs), tag_(1), epoch_(0),
+      nextCall_(0), batchStartMs_(0), recent_(cfg.sixwb ? cfg.replyMs : cfg.copyMs), tag_(1), epoch_(0),
       measureDue_(false), measureInFlight_(false), measureLate_(false), measureSentMs_(0), haveSize_(false), sizeW_(0), sizeH_(0),
       haveMovedTo_(false), textRefusals_(0), lastRefusedText_(0), registeredTag_(0), lastGraphicsMs_(0), haveGraphicsTime_(false) {
     if (cfg_.maxInFlight == 0) cfg_.maxInFlight = 1;
@@ -308,6 +308,9 @@ bool Core::next(uint32_t now, most::Msg& out) {
     ++nextCall_;
     if (cfg_.sixwb) {
         out.txType = c.fkt == kAddBitmap ? 0 : cfg_.graphicsTxType;
+        // A delayed mirror of our frame visibility can carry the navigation client's header.
+        if (c.fkt == kSetVisibility && c.handle() == cfg_.navFrame)
+            recent_.add(c.fkt, c.handle(), now, c.payload[2]);
     } else {
         InFlight f;
         f.fkt = c.fkt;
@@ -368,7 +371,9 @@ void Core::onMessage(const most::View& m, uint32_t now) {
     // The cluster's copy of an answer to us. A late answer to the measurement is past recent_'s window, and its copy
     // may come before our own: while it is awaited, a size for the measured handle is ours too, not the navigation.
     bool measureCopy = measureInFlight_ && m.fkt == kGetSize && m.len >= 2 && rdBe16(m.data) == cfg_.measureHandle;
-    if (m.src == host_ && (measureCopy || recent_.isCopy(m.fkt, m.data, m.len, now) || awaited(m, now))) {
+    const bool recentCopy = (!cfg_.sixwb || m.op == most::kOpResultAck) &&
+                            recent_.isCopy(m.fkt, m.data, m.len, now);
+    if (m.src == host_ && (measureCopy || recentCopy || awaited(m, now))) {
         ++stats_.copies;
         return;
     }
